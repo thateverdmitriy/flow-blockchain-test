@@ -23,13 +23,15 @@ const momentItemsPath = '"../../contracts/MomentItems.cdc"';
 
 module.exports = class FlowService {
 
-  createAccount = (auth) => {
-    const encodePublicKeys = auth.publicKeys?.map((pk) =>
+  createAccount = async (auth) => {
+    const user = await this.getAccount(flowConfig.minterAddress);
+    
+    const encodePublicKeys = user.keys.map((pk) =>
       this.encodePublicKeyForFlow(pk.publicKey),
     );
 
     const CODE = `
-    transaction(publicKey: [String]) {
+    transaction(publicKeys: [String]) {
       prepare(signer: AuthAccount) {
         let acct = AuthAccount(payer: signer)
         for key in publicKeys {
@@ -38,6 +40,7 @@ module.exports = class FlowService {
       }
     }`;
 
+    console.log(encodePublicKeys)
     return fcl.pipe([
       fcl.invariant(
         encodePublicKeys.length > 0,
@@ -48,10 +51,12 @@ module.exports = class FlowService {
       fcl.proposer(auth),
       fcl.authorizations([auth]),
       fcl.payer(auth),
+      fcl.limit(10000)
     ]);
   };
 
-  authMinter = async (account = {}) => {
+  authMinter = () => {
+    return async (account = {}) => {
     const user = await this.getAccount(flowConfig.minterAddress);
     const key = user.keys[flowConfig.minterAccountKeyIndex];
 
@@ -63,7 +68,7 @@ module.exports = class FlowService {
       tempId: `${user.address}-${key.index}`,
       addr: fcl.sansPrefix(user.address), // which flow account is going to be doing the signing
       keyId: Number(key.index), // says which key we want to do the signing with
-      publicKeys: user.keys,
+      //publicKeys: user.keys,
       // How to get a signature
       signingFunction: async (signable) => {
         return {
@@ -74,6 +79,7 @@ module.exports = class FlowService {
       },
     };
   };
+}
 
   setupAccount = async (flowAddress = '') => {
     const authorization = await this.authMinter(flowAddress);
